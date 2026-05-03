@@ -1,0 +1,45 @@
+# Go binaries
+nids-api
+nids-api.exe
+nids-api-v2
+nids-api-v2.exe
+
+# Python environments and cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Datasets and PCAP files (Too large for Git)
+*.csv
+*.pcap
+*.pcapng
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Virtual Machine Files
+*.vmdk
+*.vdi
+*.qcow2
+*.ova
+*.ovf
+*.iso
+*.box
+*.vagrant
+*.vbox
+*.nvram
+*.vmsd
+*.vmx
+*.vmxf
+.vagrant/
+*.vmem
+*.lck
+*.scoreboard
+vmware*.log
+mksSandbox*.log
