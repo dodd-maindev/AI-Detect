@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 
 	"nids-api/config"
@@ -51,9 +52,11 @@ func main() {
 
 	snifferConfig := sniffer.Config{
 		Interface: "ens33",
-		TargetIP:  "10.203.152.105",
+		TargetIP:  getLocalIP(),
 		ActiveIPS: activeIPS,
 	}
+	fmt.Printf("  Target IP auto-detected: %s\n", snifferConfig.TargetIP)
+	
 	ipsAgent := sniffer.NewIPSCore(snifferConfig, preproc, pred)
 	go ipsAgent.Start()
 
@@ -72,4 +75,20 @@ func main() {
 	if err := http.ListenAndServe(config.ServerPort, mux); err != nil {
 		log.Fatalf("  Server failed: %v", err)
 	}
+}
+
+// getLocalIP returns the non-loopback local IP of the host
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "127.0.0.1"
+	}
+	for _, address := range addrs {
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "127.0.0.1"
 }

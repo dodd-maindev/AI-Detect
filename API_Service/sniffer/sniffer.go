@@ -5,7 +5,10 @@ package sniffer
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
@@ -28,6 +31,7 @@ type IPSCore struct {
 	predictor    *predictor.Predictor
 	blockedIPs   map[string]bool
 	flowManager  *FlowManager
+	xdpManager   *XDPManager
 	mu           sync.Mutex
 }
 
@@ -45,6 +49,8 @@ func NewIPSCore(cfg Config, prep *preprocessor.Preprocessor, pred *predictor.Pre
 // Start begins capturing packets and predicting.
 func (ips *IPSCore) Start() {
 	ips.printBanner()
+	ips.initXDP()
+	ips.handleShutdown()
 
 	handle, err := pcap.OpenLive(ips.cfg.Interface, 1600, true, pcap.BlockForever)
 	if err != nil {
@@ -58,6 +64,37 @@ func (ips *IPSCore) Start() {
 	for pkt := range packetSource.Packets() {
 		ips.processPacket(pkt)
 	}
+}
+
+// initXDP attempts to load the XDP firewall. Falls back to iptables on failure.
+func (ips *IPSCore) initXDP() {
+	if !ips.cfg.ActiveIPS {
+		return
+	}
+	bpfPath := "sniffer/bpf/xdp_firewall.o"
+	xdp, err := NewXDPManager(ips.cfg.Interface, bpfPath)
+	if err != nil {
+		fmt.Printf("  %s[!]%s XDP load failed: %v\n", BrightYellow, Reset, err)
+		fmt.Printf("  %s[*]%s Fallback: using iptables for blocking\n", BrightYellow, Reset)
+		return
+	}
+	ips.xdpManager = xdp
+	fmt.Printf("  %s[✓]%s XDP Hardware Firewall loaded on %s%s%s\n",
+		BrightGreen, Reset, Bold+BrightWhite, ips.cfg.Interface, Reset)
+}
+
+// handleShutdown ensures XDP is detached when the process exits.
+func (ips *IPSCore) handleShutdown() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		if ips.xdpManager != nil {
+			ips.xdpManager.Cleanup()
+			fmt.Printf("\n  %s[✓]%s XDP detached safely.\n", BrightGreen, Reset)
+		}
+		os.Exit(0)
+	}()
 }
 
 // printBanner displays the startup banner with mode information.

@@ -147,7 +147,7 @@ func (ips *IPSCore) processPacket(pkt gopacket.Packet) {
 	ips.flowManager.ProcessPacket(pkt)
 }
 
-// blockIP executes iptables block and schedules automatic unban after 1 minute.
+// blockIP blocks an attacker IP using XDP (hardware) or iptables (kernel) fallback.
 func (ips *IPSCore) blockIP(ip string, label string, conf float64, detectionTime time.Duration) {
 	ips.mu.Lock()
 	if ips.blockedIPs[ip] {
@@ -157,9 +157,20 @@ func (ips *IPSCore) blockIP(ip string, label string, conf float64, detectionTime
 	ips.blockedIPs[ip] = true
 	ips.mu.Unlock()
 
-	LogIntrusion(label, conf, ip, "ACTIVE IPS - BLOCKED 1 MINUTE", fmt.Sprintf("%v", detectionTime))
+	detTimeStr := fmt.Sprintf("%v", detectionTime)
 
-	exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP").Run()
+	if ips.xdpManager != nil {
+		if err := ips.xdpManager.BlockIP(ip); err == nil {
+			LogIntrusion(label, conf, ip, "XDP HARDWARE BLOCK - 1 MIN", detTimeStr)
+		} else {
+			// XDP failed, fallback to iptables for this IP
+			exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP").Run()
+			LogIntrusion(label, conf, ip, "IPTABLES BLOCK - 1 MIN", detTimeStr)
+		}
+	} else {
+		exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP").Run()
+		LogIntrusion(label, conf, ip, "ACTIVE IPS - BLOCKED 1 MINUTE", detTimeStr)
+	}
 
 	go func() {
 		time.Sleep(60 * time.Second)
@@ -169,6 +180,10 @@ func (ips *IPSCore) blockIP(ip string, label string, conf float64, detectionTime
 		ips.mu.Unlock()
 
 		LogUnban(ip)
-		exec.Command("iptables", "-D", "INPUT", "-s", ip, "-j", "DROP").Run()
+		if ips.xdpManager != nil {
+			ips.xdpManager.UnblockIP(ip)
+		} else {
+			exec.Command("iptables", "-D", "INPUT", "-s", ip, "-j", "DROP").Run()
+		}
 	}()
 }
