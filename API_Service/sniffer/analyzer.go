@@ -169,11 +169,11 @@ func (ips *IPSCore) blockIP(ip string, label string, conf float64, detectionTime
 		}
 	} else {
 		exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP").Run()
-		LogIntrusion(label, conf, ip, "ACTIVE IPS - BLOCKED 1 MINUTE", detTimeStr)
+		LogIntrusion(label, conf, ip, "ACTIVE IPS - BLOCKED 5 MINUTES", detTimeStr)
 	}
 
 	go func() {
-		time.Sleep(60 * time.Second)
+		time.Sleep(5 * 60 * time.Second) // 5 minutes ban
 
 		ips.mu.Lock()
 		delete(ips.blockedIPs, ip)

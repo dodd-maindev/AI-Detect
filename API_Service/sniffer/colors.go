@@ -94,7 +94,7 @@ func LogIntrusion(label string, conf float64, ip string, mode string, detTime st
 
 // LogUnban prints the unban notification.
 func LogUnban(ip string) {
-	fmt.Printf("\n  %s[✓]%s IP %s%s%s đã được %sgỡ block%s sau 1 phút.\n\n",
+	fmt.Printf("\n  %s[✓]%s IP %s%s%s đã được %sgỡ block%s sau 5 phút.\n\n",
 		BrightGreen, Reset,
 		Bold+White, ip, Reset,
 		BrightGreen, Reset,
